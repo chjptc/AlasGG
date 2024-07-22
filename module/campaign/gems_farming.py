@@ -26,7 +26,9 @@ from module.retire.scanner import ShipScanner
 from module.ui.assets import BACK_ARROW
 import inflection
 from module.ui.page import page_fleet
-
+'''
+测试
+'''
 SIM_VALUE = 0.95
 
 

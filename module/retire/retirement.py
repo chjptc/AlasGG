@@ -89,6 +89,7 @@ class Retirement(Enhancement, QuickRetireSettingHandler):
         executed = False
         for button in [SHIP_CONFIRM, SHIP_CONFIRM_2, EQUIP_CONFIRM, EQUIP_CONFIRM_2, GET_ITEMS_1, SR_SSR_CONFIRM]:
             self.interval_clear(button)
+        self.popup_interval_clear()
         timeout = Timer(10, count=10).start()
         while 1:
             if skip_first_screenshot:
@@ -110,37 +111,41 @@ class Retirement(Enhancement, QuickRetireSettingHandler):
                 timeout.reset()
 
             # Click
-            if self.appear(SHIP_CONFIRM, offset=(30, 30), interval=2):
-                if SHIP_CONFIRM.match_appear_on(self.device.image):
-                    self.device.click(SHIP_CONFIRM)
+            # Ship confirm, order by display hierarchy
+            if self._unable_to_enhance \
+                    or self.config.OldRetire_SR \
+                    or self.config.OldRetire_SSR \
+                    or self.config.Retirement_RetireMode == 'one_click_retire':
+                if self.handle_popup_confirm(name='RETIRE_SR_SSR', offset=(20, 50)):
+                    self.interval_reset([SHIP_CONFIRM, SHIP_CONFIRM_2])
                     continue
-                else:
-                    self.interval_clear(SHIP_CONFIRM)
-            if self.appear(SHIP_CONFIRM_2, offset=(30, 30), interval=2):
+                if self.config.SERVER in ['cn', 'jp', 'tw'] and \
+                        self.appear_then_click(SR_SSR_CONFIRM, offset=(20, 50), interval=2):
+                    self.interval_reset([SHIP_CONFIRM, SHIP_CONFIRM_2])
+                    continue
+            if self.match_template_color(SHIP_CONFIRM_2, offset=(30, 30), interval=2):
                 if self.retire_keep_common_cv and not self._have_kept_cv:
                     self.keep_one_common_cv()
                 self.device.click(SHIP_CONFIRM_2)
+                # GET_ITEMS_1 is going to appear, avoid re-entering ship confirm
                 self.interval_clear(GET_ITEMS_1)
+                self.interval_reset([SHIP_CONFIRM, SHIP_CONFIRM_2])
                 continue
+            if self.match_template_color(SHIP_CONFIRM, offset=(30, 30), interval=2):
+                self.device.click(SHIP_CONFIRM)
+                continue
+            # Equip confirm
             if self.appear_then_click(EQUIP_CONFIRM, offset=(30, 30), interval=2):
                 executed = True
                 continue
             if self.appear_then_click(EQUIP_CONFIRM_2, offset=(30, 30), interval=2):
                 self.interval_clear(GET_ITEMS_1)
                 continue
+            # Get items
             if self.appear(GET_ITEMS_1, offset=(30, 30), interval=2):
                 self.device.click(GET_ITEMS_1_RETIREMENT_SAVE)
                 self.interval_reset(SHIP_CONFIRM)
                 continue
-            if self._unable_to_enhance \
-                    or self.config.OldRetire_SR \
-                    or self.config.OldRetire_SSR \
-                    or self.config.Retirement_RetireMode == 'one_click_retire':
-                if self.handle_popup_confirm(name='RETIRE_SR_SSR', offset=(20, 50)):
-                    continue
-                if self.config.SERVER in ['cn', 'jp', 'tw'] and \
-                        self.appear_then_click(SR_SSR_CONFIRM, offset=(20, 50), interval=2):
-                    continue
 
     def retirement_appear(self):
         return self.appear(RETIRE_APPEAR_1, offset=30) \
@@ -259,7 +264,7 @@ class Retirement(Enhancement, QuickRetireSettingHandler):
             if selected == 0:
                 break
             self.device.screenshot()
-            if not (self.appear(SHIP_CONFIRM, offset=(30, 30)) and SHIP_CONFIRM.match_appear_on(self.device.image)):
+            if not self.match_template_color(SHIP_CONFIRM, offset=(30, 30)):
                 logger.warning('No ship selected, retrying')
                 continue
 
@@ -454,6 +459,8 @@ class Retirement(Enhancement, QuickRetireSettingHandler):
         """
         count = 0
         RETIRE_COIN.load_color(self.device.image)
+        RETIRE_COIN._match_init = True
+        self.interval_clear(SHIP_CONFIRM_2)
 
         while 1:
             if skip_first_screenshot:
@@ -462,13 +469,13 @@ class Retirement(Enhancement, QuickRetireSettingHandler):
                 self.device.screenshot()
 
             # End
-            if not self.appear(RETIRE_COIN, threshold=0.97):
+            if not RETIRE_COIN.match(self.device.image, offset=(20, 20), similarity=0.97):
                 return True
             if count > 3:
                 logger.warning('_retire_select_one failed after 3 trial')
                 return False
 
-            if self.appear(SHIP_CONFIRM_2, offset=(30, 30), interval=3):
+            if self.appear(SHIP_CONFIRM_2, offset=(30, 30), interval=2):
                 self.device.click(button)
                 count += 1
                 continue
@@ -504,26 +511,58 @@ class Retirement(Enhancement, QuickRetireSettingHandler):
             return None
 
     def retirement_get_common_rarity_cv(self, skip_first_screenshot=False):
-        button = self.retirement_get_common_rarity_cv_in_page()
-        if button is not None:
-            return button
+        """
+        Args:
+            skip_first_screenshot:
 
-        for _ in range(7):
-            if not RETIRE_CONFIRM_SCROLL.appear(main=self):
-                logger.info('Scroll bar disappeared, stop')
-                break
-            RETIRE_CONFIRM_SCROLL.next_page(main=self)
+        Returns:
+            Button: Button to click to remove ship from retire list
+        """
+        swipe_count = 0
+        disappear_confirm = Timer(2, count=6)
+        while 1:
+            if skip_first_screenshot:
+                skip_first_screenshot = False
+            else:
+                self.device.screenshot()
+
+            # Try to get CV
             button = self.retirement_get_common_rarity_cv_in_page()
             if button is not None:
                 return button
+
+            # Wait scroll bar
+            if RETIRE_CONFIRM_SCROLL.appear(main=self):
+                disappear_confirm.clear()
+            else:
+                disappear_confirm.start()
+                if disappear_confirm.reached():
+                    logger.warning('Scroll bar disappeared, stop')
+                    break
+                else:
+                    continue
+
             if RETIRE_CONFIRM_SCROLL.at_bottom(main=self):
                 logger.info('Scroll bar reached end, stop')
                 break
 
+            # Swipe next page
+            if swipe_count >= 7:
+                logger.info('Reached maximum swipes to find common CV')
+                break
+            RETIRE_CONFIRM_SCROLL.next_page(main=self)
+            swipe_count += 1
+
         return button
 
     def keep_one_common_cv(self):
+        """
+        Returns:
+
+        """
+        logger.info('Keep one common CV')
         button = self.retirement_get_common_rarity_cv()
         if button is not None:
             self._retire_select_one(button)
             self._have_kept_cv = True
+        logger.info('Keep one common CV end')

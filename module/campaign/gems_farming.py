@@ -277,8 +277,6 @@ class GemsFarming(CampaignRun, FleetEquipment, Dock):
             min_level = 2
         else:
             min_level = max_level
-        if self.hard_mode:
-            min_level = max(min_level, 49)
         scanner = ShipScanner(level=(min_level, max_level), emotion=(emotion, 150),
                               fleet=self.config.Fleet_Fleet1, status='free')
         scanner.disable('rarity')

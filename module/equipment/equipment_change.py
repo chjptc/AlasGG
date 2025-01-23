@@ -6,6 +6,7 @@ from module.equipment.equipment import Equipment
 from module.logger import logger
 from module.ui.assets import BACK_ARROW
 from module.ui.scroll import Scroll
+from module.ui.switch import Switch
 
 # Button of 5 equipments
 EQUIP_INFO_BAR = ButtonGrid(

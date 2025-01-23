@@ -305,7 +305,8 @@ class GemsFarming(CampaignRun, FleetEquipment, Dock):
         candidates = self.find_candidates(self.get_templates(self.config.GemsFarming_CommonDD), scanner)
         return candidates
 
-def find_candidates(self, template, scanner):
+
+    def find_candidates(self, template, scanner):
         """
         Find candidates based on template matching using a scanner.
 
